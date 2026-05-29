@@ -1,0 +1,6 @@
+{
+  "name": "English Center Management",
+  "description": "A dual-portal English center management application featuring real-time state synchronization, teacher attendance management, star rewards, class diaries, and student portals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
