@@ -11,7 +11,7 @@ export const LoginGate: React.FC = () => {
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password) {
       addToast('Please input both username and password credentials.', 'warning');
@@ -19,16 +19,18 @@ export const LoginGate: React.FC = () => {
     }
 
     setLoading(true);
-    // Simulating slight loading feeling for deluxe transitions
-    setTimeout(() => {
-      const res = login(username, password);
+    try {
+      const res = await login(username, password);
       setLoading(false);
       if (res) {
         addToast(`Welcome back, ${username}! Successful Elite session initialized.`, 'success');
       } else {
         addToast('Invalid credentials. Hint: use password123 as requested.', 'error');
       }
-    }, 450);
+    } catch (err) {
+      setLoading(false);
+      addToast('Error during authorization verification.', 'error');
+    }
   };
 
   // Pre-seed helper chips for Ms. Nhung/Student review

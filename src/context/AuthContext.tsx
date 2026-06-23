@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { INITIAL_USERS } from '../data/mockData';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface AuthContextType {
   user: User | null;
   activeRole: UserRole | null;
   activeStudentId: string; // current active student perspective
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   setRole: (role: UserRole) => void;
   setActiveStudentId: (id: string) => void;
@@ -34,24 +35,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('elite_active_student_id', id);
   };
 
-  const login = (username: string, password: string): boolean => {
+  const login = async (username: string, password: string): Promise<boolean> => {
     const cleanUser = username.trim().toLowerCase();
     
-    // Check msnhung or student1
+    // Validate custom static or custom student password
     if (password === 'password123') {
-      const foundUser = INITIAL_USERS.find(
-        (u) => u.username.toLowerCase() === cleanUser
-      );
-
-      if (foundUser) {
-        setUser(foundUser);
-        setActiveRole(foundUser.role);
-        if (foundUser.role === 'STUDENT') {
-          setActiveStudentId(foundUser.id);
+      try {
+        const q = query(collection(db, 'users'), where('username', '==', cleanUser));
+        const snap = await getDocs(q);
+        
+        if (!snap.empty) {
+          const foundUser = snap.docs[0].data() as User;
+          setUser(foundUser);
+          setActiveRole(foundUser.role);
+          if (foundUser.role === 'STUDENT') {
+            setActiveStudentId(foundUser.id);
+          }
+          localStorage.setItem('elite_auth_user', JSON.stringify(foundUser));
+          localStorage.setItem('elite_auth_role', foundUser.role);
+          return true;
         }
-        localStorage.setItem('elite_auth_user', JSON.stringify(foundUser));
-        localStorage.setItem('elite_auth_role', foundUser.role);
-        return true;
+      } catch (err) {
+        console.error('Login validation error from Firestore:', err);
       }
     }
     return false;

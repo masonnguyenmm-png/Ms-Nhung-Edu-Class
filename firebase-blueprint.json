@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User credential profiles containing names and roles",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Equal to User ID" },
+        "username": { "type": "string", "description": "Unique username" },
+        "role": { "type": "string", "enum": ["TEACHER", "STUDENT"], "description": "System access role" },
+        "full_name": { "type": "string", "description": "User's full name" }
+      },
+      "required": ["id", "username", "role", "full_name"]
+    },
+    "Class": {
+      "title": "Classroom",
+      "description": "A class taught by a teacher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "class_name": { "type": "string" },
+        "teacher_id": { "type": "string" }
+      },
+      "required": ["id", "class_name", "teacher_id"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "A student profile containing current class and star balance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "class_id": { "type": "string" },
+        "current_stars": { "type": "number" },
+        "total_sessions": { "type": "number" },
+        "remaining_sessions": { "type": "number" }
+      },
+      "required": ["id", "user_id", "class_id", "current_stars", "total_sessions", "remaining_sessions"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance status logging",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["PRESENT", "LATE", "ABSENT"] }
+      },
+      "required": ["id", "student_id", "date", "status"]
+    },
+    "ClassDiary": {
+      "title": "ClassDiary",
+      "description": "Class journal containing discussion topics and homework instructions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "class_id": { "type": "string" },
+        "date": { "type": "string" },
+        "topic": { "type": "string" },
+        "homework": { "type": "string" }
+      },
+      "required": ["id", "class_id", "date", "topic", "homework"]
+    },
+    "Reward": {
+      "title": "Reward",
+      "description": "A catalog gift available in the Star Store",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "star_cost": { "type": "number" },
+        "image_url": { "type": "string" },
+        "stock": { "type": "number" }
+      },
+      "required": ["id", "title", "star_cost", "image_url", "stock"]
+    },
+    "Redemption": {
+      "title": "Redemption",
+      "description": "A log tracking a student's spent stars for rewards",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "student_id": { "type": "string" },
+        "reward_id": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "CLAIMED"] },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "student_id", "reward_id", "status", "created_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles with role-based access metadata"
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Stores classroom definitions and assignees"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Stores academic details, active class, and star balances"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Stores student daily attendance records"
+    },
+    "/diaries/{diaryId}": {
+      "schema": "ClassDiary",
+      "description": "Stores daily lesson details and homework trackers"
+    },
+    "/rewards/{rewardId}": {
+      "schema": "Reward",
+      "description": "Stores catalog items available for redemption"
+    },
+    "/redemptions/{redemptionId}": {
+      "schema": "Redemption",
+      "description": "Stores transaction redemptions"
+    }
+  }
+}

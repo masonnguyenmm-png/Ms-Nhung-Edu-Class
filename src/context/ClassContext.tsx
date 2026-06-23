@@ -9,6 +9,16 @@ import {
   INITIAL_CLASSES
 } from '../data/mockData';
 import { synths } from '../utils/audio';
+import { 
+  collection, 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  deleteDoc, 
+  getDocs,
+  getDoc
+} from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from '../lib/firebase';
 
 interface ClassContextType {
   classes: Class[];
@@ -37,45 +47,17 @@ interface ClassContextType {
 const ClassContext = createContext<ClassContextType | undefined>(undefined);
 
 export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Loaded from LocalStorage or pre-seeded mockData
-  const [classes, setClasses] = useState<Class[]>(() => {
-    const saved = localStorage.getItem('elite_db_classes');
-    return saved ? JSON.parse(saved) : INITIAL_CLASSES;
-  });
-
+  const [classes, setClasses] = useState<Class[]>(INITIAL_CLASSES);
   const [activeClassId, setActiveClassIdState] = useState<string>(() => {
     return localStorage.getItem('elite_active_class_id') || 'class-ielts-adv';
   });
 
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('elite_db_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
-  });
-
-  const [students, setStudents] = useState<Student[]>(() => {
-    const saved = localStorage.getItem('elite_db_students');
-    return saved ? JSON.parse(saved) : INITIAL_STUDENTS;
-  });
-
-  const [attendance, setAttendance] = useState<Attendance[]>(() => {
-    const saved = localStorage.getItem('elite_db_attendance');
-    return saved ? JSON.parse(saved) : INITIAL_ATTENDANCE;
-  });
-
-  const [diaries, setDiaries] = useState<ClassDiary[]>(() => {
-    const saved = localStorage.getItem('elite_db_diaries');
-    return saved ? JSON.parse(saved) : INITIAL_DIARIES;
-  });
-
-  const [rewards, setRewards] = useState<Reward[]>(() => {
-    const saved = localStorage.getItem('elite_db_rewards');
-    return saved ? JSON.parse(saved) : INITIAL_REWARDS;
-  });
-
-  const [redemptions, setRedemptions] = useState<Redemption[]>(() => {
-    const saved = localStorage.getItem('elite_db_redemptions');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
+  const [attendance, setAttendance] = useState<Attendance[]>(INITIAL_ATTENDANCE);
+  const [diaries, setDiaries] = useState<ClassDiary[]>(INITIAL_DIARIES);
+  const [rewards, setRewards] = useState<Reward[]>(INITIAL_REWARDS);
+  const [redemptions, setRedemptions] = useState<Redemption[]>([]);
 
   // Global custom styled notification toasts state
   const [toasts, setToasts] = useState<AppToast[]>([]);
@@ -86,65 +68,97 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('elite_active_class_id', id);
   };
 
-  // Auto save database states to LocalStorage upon changes
+  // 1. One-time Bootstrap checking of Firestore. Seed with INITIAL mockData if totally empty
   useEffect(() => {
-    localStorage.setItem('elite_db_classes', JSON.stringify(classes));
-  }, [classes]);
-
-  useEffect(() => {
-    localStorage.setItem('elite_db_users', JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    localStorage.setItem('elite_db_students', JSON.stringify(students));
-  }, [students]);
-
-  useEffect(() => {
-    localStorage.setItem('elite_db_attendance', JSON.stringify(attendance));
-  }, [attendance]);
-
-  useEffect(() => {
-    localStorage.setItem('elite_db_diaries', JSON.stringify(diaries));
-  }, [diaries]);
-
-  useEffect(() => {
-    localStorage.setItem('elite_db_rewards', JSON.stringify(rewards));
-  }, [rewards]);
-
-  useEffect(() => {
-    localStorage.setItem('elite_db_redemptions', JSON.stringify(redemptions));
-  }, [redemptions]);
-
-  // Sync listener to guarantee instant tabs or portal-switcher reactivity in real time
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'elite_db_classes' && e.newValue) {
-        setClasses(JSON.parse(e.newValue));
-      }
-      if (e.key === 'elite_db_users' && e.newValue) {
-        setUsers(JSON.parse(e.newValue));
-      }
-      if (e.key === 'elite_db_students' && e.newValue) {
-        setStudents(JSON.parse(e.newValue));
-      }
-      if (e.key === 'elite_db_attendance' && e.newValue) {
-        setAttendance(JSON.parse(e.newValue));
-      }
-      if (e.key === 'elite_db_diaries' && e.newValue) {
-        setDiaries(JSON.parse(e.newValue));
-      }
-      if (e.key === 'elite_db_rewards' && e.newValue) {
-        setRewards(JSON.parse(e.newValue));
-      }
-      if (e.key === 'elite_db_redemptions' && e.newValue) {
-        setRedemptions(JSON.parse(e.newValue));
-      }
-      if (e.key === 'elite_active_class_id' && e.newValue) {
-        setActiveClassIdState(e.newValue);
+    const bootstrapFirestoreIfNeeded = async () => {
+      try {
+        const classesSnap = await getDocs(collection(db, 'classes'));
+        if (classesSnap.empty) {
+          console.log("Seeding empty Firestore database with default Starfish data...");
+          
+          for (const item of INITIAL_USERS) {
+            await setDoc(doc(db, 'users', item.id), item);
+          }
+          for (const item of INITIAL_CLASSES) {
+            await setDoc(doc(db, 'classes', item.id), item);
+          }
+          for (const item of INITIAL_STUDENTS) {
+            await setDoc(doc(db, 'students', item.id), item);
+          }
+          for (const item of INITIAL_ATTENDANCE) {
+            await setDoc(doc(db, 'attendance', item.id), item);
+          }
+          for (const item of INITIAL_DIARIES) {
+            await setDoc(doc(db, 'diaries', item.id), item);
+          }
+          for (const item of INITIAL_REWARDS) {
+            await setDoc(doc(db, 'rewards', item.id), item);
+          }
+          console.log("Firestore standard seeding complete.");
+        }
+      } catch (err) {
+        console.error("Firestore bootstrap failed:", err);
       }
     };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+
+    bootstrapFirestoreIfNeeded();
+  }, []);
+
+  // 2. Real-time Firebase Firestore state synchronizer via onSnapshot
+  useEffect(() => {
+    const unsubClasses = onSnapshot(collection(db, 'classes'), (snap) => {
+      const list: Class[] = [];
+      snap.forEach((d) => list.push(d.data() as Class));
+      if (list.length > 0) setClasses(list);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'classes'));
+
+    const unsubUsers = onSnapshot(collection(db, 'users'), (snap) => {
+      const list: User[] = [];
+      snap.forEach((d) => list.push(d.data() as User));
+      if (list.length > 0) setUsers(list);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'users'));
+
+    const unsubStudents = onSnapshot(collection(db, 'students'), (snap) => {
+      const list: Student[] = [];
+      snap.forEach((d) => list.push(d.data() as Student));
+      if (list.length > 0) setStudents(list);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'students'));
+
+    const unsubAttendance = onSnapshot(collection(db, 'attendance'), (snap) => {
+      const list: Attendance[] = [];
+      snap.forEach((d) => list.push(d.data() as Attendance));
+      setAttendance(list);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'attendance'));
+
+    const unsubDiaries = onSnapshot(collection(db, 'diaries'), (snap) => {
+      const list: ClassDiary[] = [];
+      snap.forEach((d) => list.push(d.data() as ClassDiary));
+      list.sort((a, b) => b.date.localeCompare(a.date));
+      setDiaries(list);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'diaries'));
+
+    const unsubRewards = onSnapshot(collection(db, 'rewards'), (snap) => {
+      const list: Reward[] = [];
+      snap.forEach((d) => list.push(d.data() as Reward));
+      if (list.length > 0) setRewards(list);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'rewards'));
+
+    const unsubRedemptions = onSnapshot(collection(db, 'redemptions'), (snap) => {
+      const list: Redemption[] = [];
+      snap.forEach((d) => list.push(d.data() as Redemption));
+      list.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      setRedemptions(list);
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'redemptions'));
+
+    return () => {
+      unsubClasses();
+      unsubUsers();
+      unsubStudents();
+      unsubAttendance();
+      unsubDiaries();
+      unsubRewards();
+      unsubRedemptions();
+    };
   }, []);
 
   const addToast = (message: string, type: 'success' | 'warning' | 'info' | 'error', playSound = true) => {
@@ -177,15 +191,13 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return studentId.replace('student-', '').replace(/^\w/, (c) => c.toUpperCase());
   };
 
-  // Direct set attendance status with relational tuition session mapping
+  // Direct set attendance status with relational tuition session mapping in Firestore
   const setAttendanceDirect = (studentId: string, date: string, status: AttendanceStatus | null) => {
     const existingIndex = attendance.findIndex(
       (a) => a.student_id === studentId && a.date === date
     );
 
-    let updatedAttendance = [...attendance];
     let sessionDelta = 0;
-
     const oldStatus = existingIndex === -1 ? null : attendance[existingIndex].status;
     const wasConsuming = oldStatus === 'PRESENT' || oldStatus === 'LATE';
     const isConsuming = status === 'PRESENT' || status === 'LATE';
@@ -196,44 +208,40 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       sessionDelta = -1; // consume session
     }
 
+    const attendanceId = existingIndex === -1 ? `att-${Date.now()}-${studentId}` : attendance[existingIndex].id;
+
     if (status === null) {
       if (existingIndex !== -1) {
-        updatedAttendance.splice(existingIndex, 1);
+        deleteDoc(doc(db, 'attendance', attendanceId))
+          .catch(e => handleFirestoreError(e, OperationType.DELETE, `attendance/${attendanceId}`));
       }
     } else {
-      if (existingIndex === -1) {
-        updatedAttendance.push({
-          id: `att-${Date.now()}-${studentId}`,
-          student_id: studentId,
-          date,
-          status,
-        });
-      } else {
-        updatedAttendance[existingIndex] = {
-          ...updatedAttendance[existingIndex],
-          status,
-        };
-      }
+      const attRecord: Attendance = {
+        id: attendanceId,
+        student_id: studentId,
+        date,
+        status,
+      };
+      setDoc(doc(db, 'attendance', attendanceId), attRecord)
+        .catch(e => handleFirestoreError(e, OperationType.WRITE, `attendance/${attendanceId}`));
     }
 
-    setAttendance(updatedAttendance);
-
     if (sessionDelta !== 0) {
-      setStudents((prevStudents) =>
-        prevStudents.map((s) => {
-          if (s.id === studentId) {
-            const newRemaining = Math.max(0, s.remaining_sessions + sessionDelta);
-            if (newRemaining < 4 && newRemaining !== s.remaining_sessions) {
-              addToast(`Tuition Alert: ${s.id === 'student-quynhchi' ? 'Your' : getStudentName(s.id)}'s tuition has only ${newRemaining} sessions left!`, 'warning', false);
-            }
-            return {
-              ...s,
-              remaining_sessions: newRemaining,
-            };
-          }
-          return s;
-        })
-      );
+      const studentObj = students.find((s) => s.id === studentId);
+      if (studentObj) {
+        const newRemaining = Math.max(0, studentObj.remaining_sessions + sessionDelta);
+        if (newRemaining < 4 && newRemaining !== studentObj.remaining_sessions) {
+          addToast(
+            `Tuition Alert: ${studentObj.id === 'student-quynhchi' ? 'Your' : getStudentName(studentObj.id)}'s tuition has only ${newRemaining} sessions left!`,
+            'warning',
+            false
+          );
+        }
+        setDoc(doc(db, 'students', studentId), {
+          ...studentObj,
+          remaining_sessions: newRemaining,
+        }).catch(e => handleFirestoreError(e, OperationType.WRITE, `students/${studentId}`));
+      }
     }
 
     // Play feedback sound
@@ -274,43 +282,46 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setAttendanceDirect(studentId, date, nextStatus);
   };
 
-  // Gamified star increments/decrements with live sound and particles mapping
+  // Gamified star increments/decrements mapped to Firestore
   const adjustStars = (studentId: string, amount: number) => {
-    setStudents((prev) =>
-      prev.map((s) => {
-        if (s.id === studentId) {
-          const newStars = Math.max(0, s.current_stars + amount);
-          if (amount > 0) {
-            synths.playDing();
-            triggerForceConfettiBurst();
-          } else {
-            synths.playPop();
-          }
-          return {
-            ...s,
-            current_stars: newStars,
-          };
+    const s = students.find((item) => item.id === studentId);
+    if (!s) return;
+    const newStars = Math.max(0, s.current_stars + amount);
+
+    setDoc(doc(db, 'students', studentId), {
+      ...s,
+      current_stars: newStars,
+    })
+      .then(() => {
+        if (amount > 0) {
+          synths.playDing();
+          triggerForceConfettiBurst();
+        } else {
+          synths.playPop();
         }
-        return s;
       })
-    );
+      .catch((e) => handleFirestoreError(e, OperationType.WRITE, `students/${studentId}`));
   };
 
-  // Ms. Nhung's Class Diary Entry publishing
+  // Ms. Nhung's Class Diary Entry publishing mapped to Firestore
   const addDiary = (topic: string, homework: string, date: string) => {
+    const diaryId = `diary-${Date.now()}`;
     const newEntry: ClassDiary = {
-      id: `diary-${Date.now()}`,
+      id: diaryId,
       class_id: activeClassId,
       date,
       topic,
       homework,
     };
 
-    setDiaries((prev) => [newEntry, ...prev]);
-    addToast(`New Class Diary Published: "${topic}"!`, 'success');
+    setDoc(doc(db, 'diaries', diaryId), newEntry)
+      .then(() => {
+        addToast(`New Class Diary Published: "${topic}"!`, 'success');
+      })
+      .catch((e) => handleFirestoreError(e, OperationType.WRITE, `diaries/${diaryId}`));
   };
 
-  // Add Class dynamically
+  // Add Class dynamically mapped to Firestore
   const addClass = (className: string) => {
     const classId = `class-${Date.now()}`;
     const newClass: Class = {
@@ -318,12 +329,17 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       class_name: className,
       teacher_id: 'teacher-nhung',
     };
-    setClasses((prev) => [...prev, newClass]);
-    addToast(`Successfully created class: "${className}"!`, 'success');
+    
+    setDoc(doc(db, 'classes', classId), newClass)
+      .then(() => {
+        addToast(`Successfully created class: "${className}"!`, 'success');
+      })
+      .catch((e) => handleFirestoreError(e, OperationType.WRITE, `classes/${classId}`));
+      
     return newClass;
   };
 
-  // Enroll Student dynamically
+  // Enroll Student dynamically mapped to Firestore users + students
   const addStudent = (fullName: string, classId: string, remainingSessions: number = 24) => {
     const cleanId = 'student-' + fullName.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
     const studentId = `${cleanId}-${Date.now()}`;
@@ -345,8 +361,12 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       remaining_sessions: remainingSessions,
     };
 
-    setUsers((prev) => [...prev, newUser]);
-    setStudents((prev) => [...prev, newStudent]);
+    setDoc(doc(db, 'users', studentId), newUser)
+      .catch((err) => handleFirestoreError(err, OperationType.WRITE, `users/${studentId}`));
+      
+    setDoc(doc(db, 'students', studentId), newStudent)
+      .catch((err) => handleFirestoreError(err, OperationType.WRITE, `students/${studentId}`));
+
     addToast(`Successfully enrolled "${fullName}" to Starfish. Username is "${username}", password: "password123"!`, 'success');
     return newStudent;
   };
@@ -372,34 +392,25 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return { success: false, message: 'Reward out of stock!' };
     }
 
-    // Deduct Stars and Stock, create redemption log
-    setStudents((prev) =>
-      prev.map((s) => {
-        if (s.id === studentId) {
-          return { ...s, current_stars: s.current_stars - reward.star_cost };
-        }
-        return s;
-      })
-    );
-
-    setRewards((prev) =>
-      prev.map((r) => {
-        if (r.id === rewardId) {
-          return { ...r, stock: r.stock - 1 };
-        }
-        return r;
-      })
-    );
-
+    // Update in Firestore
+    const redempId = `redemp-${Date.now()}`;
     const newRedemption: Redemption = {
-      id: `redemp-${Date.now()}`,
+      id: redempId,
       student_id: studentId,
       reward_id: rewardId,
       status: 'PENDING',
       created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
     };
 
-    setRedemptions((prev) => [newRedemption, ...prev]);
+    setDoc(doc(db, 'students', studentId), { ...student, current_stars: student.current_stars - reward.star_cost })
+      .catch((e) => handleFirestoreError(e, OperationType.WRITE, `students/${studentId}`));
+
+    setDoc(doc(db, 'rewards', rewardId), { ...reward, stock: reward.stock - 1 })
+      .catch((e) => handleFirestoreError(e, OperationType.WRITE, `rewards/${rewardId}`));
+
+    setDoc(doc(db, 'redemptions', redempId), newRedemption)
+      .catch((e) => handleFirestoreError(e, OperationType.WRITE, `redemptions/${redempId}`));
+
     triggerForceConfettiBurst();
     synths.playCheer();
     addToast(`Successfully Redeemed ${reward.title}!`, 'success', false);
